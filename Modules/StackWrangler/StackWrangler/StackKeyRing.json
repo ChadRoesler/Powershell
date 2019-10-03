@@ -1,0 +1,14 @@
+{
+  "StackKeyRing": {
+    "Amazon": {
+      "AccountFile": "",
+      "AccountName": "",
+      "AccountAccessKey": "",
+      "AccountSecretKey": ""
+    },
+    "VersionControlSystem": {
+      "ExecutablePath": "",
+      "CredentialObject": {}
+    }
+  }
+}

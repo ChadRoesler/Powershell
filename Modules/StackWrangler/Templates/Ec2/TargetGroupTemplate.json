@@ -1,0 +1,12 @@
+{
+    "Resources" : {
+        "#{TargetGroup}" : {
+            "Type" : "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties" : {
+                "Port" : "#{PortNumber}",
+                "Protocol" : "#{Protocol}"
+
+            }
+        }
+    }
+}

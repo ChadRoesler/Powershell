@@ -1,0 +1,23 @@
+{
+    "Resources": {
+        "AutoScalingGroupTemplate" : {
+            "Type" : "AWS::AutoScaling::AutoScalingGroup",
+            "Properties" : {
+                "AutoScalingGroupName" : "#{AutoScalingGroupName}",
+                "AvailabilityZones" : [],
+                "Cooldown" : "#{Cooldown}",
+                "DesiredCapacity" : "#{DesiredCapacity}",
+                "HealthCheckGracePeriod" : "#{HealthCheckGracePeriod}",
+                "HealthCheckType" : "#{HealthCheckType}",
+                "LaunchTemplate" : {},
+                "MaxSize" : "#{MaxSize}",
+                "MinSize" : "#{MinSize}",
+                "TargetGroupARNs" : [],
+                "TerminationPolicies" : [
+                    "Default"
+                ],
+                "VPCZoneIdentifier" : []
+            }
+        }
+    }
+}
