@@ -67,6 +67,7 @@ function Create-SecruirtyGroupGress
         [int] $fromPort,
         [int] $toPort,
         [string[]] $cidrIpArray,
+        [string] $description,
         [string] $templateLocation = "$($PSScriptRoot)\..\Templates\Ec2\GressTemplate.json"
     )
 
@@ -84,6 +85,10 @@ function Create-SecruirtyGroupGress
         {
             $securityGroupGressObject | Add-Member -MemberType NoteProperty -Name "FromPort" -Value $fromPort
             $securityGroupGressObject | Add-Member -MemberType NoteProperty -Name "ToPort" -Value $toPort
+        }
+        if(![string]::IsNullOrWhiteSpace($description))
+        {
+            $securityGroupGressObject | Add-Member -MemberType NoteProperty -Name "Description" -Value $description
         }
 
         $securityGroupGressObjectArray += $securityGroupGressObject

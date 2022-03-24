@@ -137,3 +137,12 @@ function Create-MultipleS3Buckets
         return $createdObject
     }
 }
+
+
+function Create-S3Key
+{
+    param (
+        [string] $bucketName,
+        
+    )
+}

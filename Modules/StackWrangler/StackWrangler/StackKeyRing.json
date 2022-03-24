@@ -1,14 +1,14 @@
 {
-  "StackKeyRing": {
-    "Amazon": {
-      "AccountFile": "",
-      "AccountName": "",
-      "AccountAccessKey": "",
-      "AccountSecretKey": ""
-    },
-    "VersionControlSystem": {
-      "ExecutablePath": "",
-      "CredentialObject": {}
+    "StackKeyRing" : {
+        "Amazon" : {
+            "AccountAccessKey" : "",
+            "AccountSecretKey" : "",
+            "AccountFile" : "C:\\Users\\CaesarV\\AppData\\Local\\AWSToolkit\\RegisteredAccounts.json",
+            "AccountName" : ""
+        },
+        "VersionControlSystem" : {
+            "ExecutablePath" : "",
+            "ArgumentsObject" : {}
+        }
     }
-  }
 }

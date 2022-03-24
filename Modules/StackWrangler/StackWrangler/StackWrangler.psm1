@@ -1,56 +1,27 @@
 <#
  .Synopsis
-  Consoidates cloudformation objects and stack files into a layered organised stack.
+  Loads a Stack Mangement Configuration.
 
  .Description
-  Consumes cloudforamtion stack files and objects and organizes them into layered stack files for reuseablity.
+  Loads the Stack Configuration from either the path provided or the passed configuration.
 
- .Parameter stackSystemName
-  The system name of the stack.
-
- .Parameter stackDescription
-  The description of the stack, overwrites the current descriptions.
-
- .Parameter cloudformationFiles
-  An array of cloudformation stack file paths.
-
- .Parameter cloudformationObjects
-  An array of cloudformation stack objects.
-
- .Parameter cloudformationFolders
-  An array of folder paths containing cloudformation stack files.
-
- .Parameter recusiveCloudformationFolders
-  Recursively search folders passed to cloudformationFolders.
-
- .Parameter stackOutputDirectoryPath
-  The Directory that the stack will be output to, used to override the Stack Management Configuration File's StackDirectory.
-
-  .Parameter overwriteExistingStack
-  Overwrite Existing Stacks.
+ .Parameter stackManagementConfiguration
+  The StackManagmentConfiguration string, usually taken from a metadata file or loaded stack.
 
  .Parameter stackManagementConfigurationLocation
-  The path to the stack managementConfigurationFile.
+  The path to the stack management configuration file.
 #>
-
-function Wrangle-Stack
+function Load-StackManagementConfiguration
 {
-    param(
-        [string] $stackSystemName,
-        [string] $stackDescription = $null,
-        [array] $cloudformationFiles = $null,
-        [array] $cloudformationObjects = $null,
-        [array] $cloudformationFolders = $null,
-        [System.Object] $loadedStack = $null,
-        [bool] $recusiveCloudformationFolders = $true,
-        [string] $stackOutputDirectoryPath,
-        [switch] $overwriteExistingStack,
+    param (
         [string] $stackManagementConfiguration = $null,
         [string] $stackManagementConfigurationLocation = "$($PSScriptRoot)\StackManagement.json"
     )
 
 #################################################
 # Load Stack Management Configuration
+# A passed configuration overrides the path
+# A set Path overrides the default
 #################################################
     if([string]::IsNullOrWhiteSpace($stackManagementConfiguration) -and !(Test-Path -Path $stackManagementConfigurationLocation))
     {
@@ -85,31 +56,101 @@ function Wrangle-Stack
                 Write-ErrorLog -message "Issues occured loading the stackManagementConfigurationLocation: $($stackManagementConfigurationLocation): $($Error)"
             }
         }
+    }
+    return $stackManagementObject
+}
 
-        $orderedResourceLayerList = $stackManagementObject.ResourceLayers | Sort-Object { $_.Layer }
-        $stackReferencedObjectsMap = $stackManagementObject.ReferencedObjectsMap
-        $stackArchitecture = $stackManagementObject.StackArchitecture | Sort-Object { $_.Order }
-        $stackTransientResources = $stackManagementObject.TransientResources
-        $stackRemoveables = $stackManagementObject.Remove
-        $stackDirectory = $stackManagementObject.StackDirectory
-        if(!([string]::IsNullOrWhiteSpace($stackOutputDirectoryPath)))
+
+<#
+ .Synopsis
+  Consoidates cloudformation objects and stack files into a layered organised stack.
+
+ .Description
+  Consumes cloudforamtion stack files and objects and organizes them into layered stack files for reuseablity.
+
+ .Parameter stackSystemName
+  The system name of the stack.
+
+ .Parameter stackDescription
+  The description of the stack, overwrites the current descriptions.
+
+ .Parameter cloudformationFiles
+  An array of cloudformation stack file paths.
+
+ .Parameter cloudformationObjects
+  An array of cloudformation stack objects.
+
+ .Parameter cloudformationFolders
+  An array of folder paths containing cloudformation stack files.
+
+ .Parameter recusiveCloudformationFolders
+  Recursively search folders passed to cloudformationFolders.
+
+ .Parameter stackOutputDirectoryPath
+  The Directory that the stack will be output to, used to override the Stack Management Configuration File's StackDirectory.
+
+  .Parameter overwriteExistingStack
+  Overwrite Existing Stacks.
+
+ .Parameter stackManagementConfigurationLocation
+  The path to the stack management configuration file.
+#>
+
+function Wrangle-Stack
+{
+    param(
+        [string] $stackSystemName,
+        [string] $stackDescription = $null,
+        [array] $cloudformationFiles = $null,
+        [array] $cloudformationObjects = $null,
+        [array] $cloudformationFolders = $null,
+        [System.Object] $loadedStack = $null,
+        [bool] $recusiveCloudformationFolders = $true,
+        [string] $stackRegion = $null,
+        [string] $stackOutputDirectoryPath,
+        [switch] $overwriteExistingStack,
+        [string] $stackManagementConfiguration = $null,
+        [string] $stackManagementConfigurationLocation = "$($PSScriptRoot)\StackManagement.json"
+    )
+
+#################################################
+# Load Stack Management Configuration
+#################################################
+    $stackSystemName = $stackSystemName.ToLower()
+    $stackManagementObject = Load-StackManagementConfiguration -stackManagementConfiguration $stackManagementConfiguration `
+                                                               -stackManagementConfigurationLocation $stackManagementConfigurationLocation
+
+#################################################
+# Gather data from Stack Management Configuration
+# Sort and prep some Metadata
+#################################################
+    $orderedResourceLayerList = $stackManagementObject.ResourceLayers | Sort-Object { $_.Layer }
+    $stackReferencedObjectsMap = $stackManagementObject.ReferencedObjectsMap
+    $stackArchitecture = $stackManagementObject.StackArchitecture | Sort-Object { $_.Order }
+    $stackTransientResources = $stackManagementObject.TransientResources
+    $stackRemoveables = $stackManagementObject.RootObjectRemoval
+    $stackDirectory = $stackManagementObject.StackDirectory
+    if(!([string]::IsNullOrWhiteSpace($stackOutputDirectoryPath)))
+    {
+        $stackDirectory = $stackOutputDirectoryPath
+    }
+    $stackPath = Join-Path -Path $stackDirectory -ChildPath $stackSystemName
+    if(Test-Path -Path $stackPath)
+    {
+        if($overwriteExistingStack)
         {
-            $stackDirectory = $stackOutputDirectoryPath
+            Write-WarningLog -message "Overwriting existing stack: $($stackSystemName)"
+            Remove-Item -Path $stackPath -Recurse -Force
         }
-        $stackPath = Join-Path -Path $stackDirectory -ChildPath $stackSystemName
-        if(Test-Path -Path $stackPath)
+        else 
         {
-            if($overwriteExistingStack)
-            {
-                Write-WarningLog -message "Overwriting existing stack: $($stackSystemName)"
-                Remove-Item -Path $stackPath -Recurse -Force
-            }
-            else 
-            {
-                Write-ErrorLog -message "Stack: $($stackSystemName) exists in $($stackDirectory)"
-            }
+            Write-ErrorLog -message "Stack: $($stackSystemName) exists in $($stackDirectory)"
         }
-        $stackMetaDataFilePath = Join-Path -Path $stackPath -ChildPath "$($stackSystemname).metadata.json"
+    }
+    $stackMetadataFilePath = Join-Path -Path $stackPath -ChildPath "$($stackSystemname).metadata.json"
+    if([string]::IsNullOrWhiteSpace($stackRegion))
+    {
+        $stackRegion = $stackManagementObject.StackDefaultRegion
     }
 
 #################################################
@@ -123,6 +164,10 @@ function Wrangle-Stack
 
 #################################################
 # Load Stack Objects
+# [+]CloudformationFiles
+# [+]CloudformationObjects
+# [+]CloudformationFolders
+# [+]LoadedStack (useful for reorganization)
 #################################################
     if($null -ne $cloudformationFiles)
     {
@@ -267,7 +312,7 @@ function Wrangle-Stack
                 $conditional | Add-Member -MemberType NoteProperty -Name "Name" -Value $condition.Name
                 $conditional | Add-Member -MemberType NoteProperty -Name "ConditionsObject" -Value $refObject
                 $conditional | Add-Member -MemberType NoteProperty -Name "OriginFile" -Value $stackObject.OriginFile
-                $conditional | Add-Member -MemberType NoteProperty -Name "Layer" -Value 999
+                $conditional | Add-Member -MemberType NoteProperty -Name "Layer" -Value 9999
                 $conditional | Add-Member -MemberType NoteProperty -Name "CreateOutput" -Value $false
                 $stackConditionObjects.Objects += $conditional
                 
@@ -285,7 +330,7 @@ function Wrangle-Stack
                 $parameterization | Add-Member -MemberType NoteProperty -Name "Name" -Value $parameter.Name
                 $parameterization | Add-Member -MemberType NoteProperty -Name "ParametersObject" -Value $refObject
                 $parameterization | Add-Member -MemberType NoteProperty -Name "OriginFile" -Value $stackObject.OriginFile
-                $parameterization | Add-Member -MemberType NoteProperty -Name "Layer" -Value 999
+                $parameterization | Add-Member -MemberType NoteProperty -Name "Layer" -Value 9999
                 $parameterization | Add-Member -MemberType NoteProperty -Name "CreateOutput" -Value $false
                 $stackParameterObjects.Objects += $parameterization
             }
@@ -302,7 +347,7 @@ function Wrangle-Stack
                 $outputable | Add-Member -MemberType NoteProperty -Name "Name" -Value $output.Name
                 $outputable | Add-Member -MemberType NoteProperty -Name "OutputsObject" -Value $refObject
                 $outputable | Add-Member -MemberType NoteProperty -Name "OriginFile" -Value $stackObject.OriginFile
-                $outputable | Add-Member -MemberType NoteProperty -Name "Layer" -Value 999
+                $outputable | Add-Member -MemberType NoteProperty -Name "Layer" -Value 9999
                 $outputable | Add-Member -MemberType NoteProperty -Name "CreateOutput" -Value $false
                 $stackOutputObjects.Objects += $outputable
             }
@@ -319,7 +364,7 @@ function Wrangle-Stack
                 $map | Add-Member -MemberType NoteProperty -Name "Name" -Value $mapping.Name
                 $map | Add-Member -MemberType NoteProperty -Name "MappingsObject" -Value $refObject
                 $map | Add-Member -MemberType NoteProperty -Name "OriginFile" -Value $stackObject.OriginFile
-                $map | Add-Member -MemberType NoteProperty -Name "Layer" -Value 999
+                $map | Add-Member -MemberType NoteProperty -Name "Layer" -Value 9999
                 $map | Add-Member -MemberType NoteProperty -Name "CreateOutput" -Value $false
                 $stackMappingObjects.Objects += $map
             }
@@ -336,7 +381,7 @@ function Wrangle-Stack
                 $resourceable | Add-Member -MemberType NoteProperty -Name "Name" -Value $resource.Name
                 $resourceable | Add-Member -MemberType NoteProperty -Name "OriginFile" -Value $stackObject.OriginFile
                 $resourceable | Add-Member -MemberType NoteProperty -Name "ResourceType" -Value $stackObject.Resources."$($resource.Name)".Type
-                $resourceable | Add-Member -MemberType NoteProperty -Name "Layer" -Value 999
+                $resourceable | Add-Member -MemberType NoteProperty -Name "Layer" -Value 9999
                 $resourceable | Add-Member -MemberType NoteProperty -Name "CreateOutput" -Value $false
                 
                 if($stackTransientResources -contains $stackObject.Resources."$($resource.Name)".Type)
@@ -370,9 +415,9 @@ function Wrangle-Stack
 
 #################################################
 # Organize Resources and Capture Dependencies
-# Use match to handle catch alls (AWS::#{Section}::*)
-# if the resource type is then further caught
-# remove it from the catch all and re-add it
+# Use match to handle catch alls 
+# [+](AWS::#{Section}::*)
+# If the resource type is then further caught remove it from the catch all and re-add it
 #################################################
     Write-Log -message "Ordering Resources to their approrpiate Layers."
     foreach($orderedResourceLayer in $orderedResourceLayerList)
@@ -419,7 +464,7 @@ function Wrangle-Stack
 # Capture Resources that dont have types in the StackManagement Definition
 # Attach them at the end of the Layers
 #################################################
-    if(($stackResourceObjects.Objects | Where-Object { 999 -eq $_.Layer }).Length -gt 0)
+    if(($stackResourceObjects.Objects | Where-Object { 9999 -eq $_.Layer }).Length -gt 0)
     {
         Write-WarningLog -message "Objects of types not contained in the Stack Management Configuration File were found."
         $missingResourceLayerNumber = (($managedStackArray | Sort-Object -Property Layer -Descending | Select-Object -first 1).Layer + 1)
@@ -429,7 +474,7 @@ function Wrangle-Stack
         $missingResourceLayer | Add-Member -MemberType NoteProperty -Name "LayerName" -Value "MissingResources"
         
         $missingResourceArray = @()
-        foreach($missingResource in $stackResourceObjects.Objects | Where-Object { 999 -eq $_.Layer } | Sort-Object { $_.ResourceType })
+        foreach($missingResource in $stackResourceObjects.Objects | Where-Object { 9999 -eq $_.Layer } | Sort-Object { $_.ResourceType })
         {
             if(($missingResourceArray | Where-Object { $_.ResourceType -eq $missingResource.ResourceType }).Length -eq 0)
             {
@@ -454,7 +499,7 @@ The following Resources of that type have been found: $($missingResource.Names -
             
         }
         Write-WarningLog -message "The resources listed above will be placed in their own as the last layer"
-        foreach($missingResource in $stackResourceObjects.Objects | Where-Object { "999" -eq $_.Layer } | Sort-Object { $_.ResourceType })
+        foreach($missingResource in $stackResourceObjects.Objects | Where-Object { "9999" -eq $_.Layer } | Sort-Object { $_.ResourceType })
         {
             
             if(($missingResource.ResourcesObject."$($missingResource.Name)".PsObject.Properties | Where-Object { $_.Name -eq "DependsOn" }).Length -gt 0)
@@ -463,11 +508,12 @@ The following Resources of that type have been found: $($missingResource.Names -
                 $newRefObject | Add-Member -MemberType NoteProperty -Name "Resource" -Value $missingResource.Name
                 $newRefObject | Add-Member -MemberType NoteProperty -Name "DependsOn" -Value $missingResource.ResourcesObject."$($missingResource.Name)".DependsOn
                 $newRefObject | Add-Member -MemberType NoteProperty -Name "ResourceLayer" -Value $missingResourceLayer
-                    
+
                 $dependantResourceArray += $newRefObject
                 $missingResource.ResourcesObject."$($missingResource.Name)".PsObject.Properties.Remove("DependsOn")
             }
             $missingResource.Layer = $missingResourceLayerNumber
+
             $missingResourceLayer.Resources | Add-Member -MemberType NoteProperty -Name $missingResource.Name -Value $missingResource.ResourcesObject."$($missingResource.Name)"
         }
         $managedStackArray += $missingResourceLayer
@@ -494,7 +540,6 @@ The following Resources of that type have been found: $($missingResource.Names -
                     $resource | Add-Member -MemberType NoteProperty -Name "DependentOf" -Value @()
                 }
                 $resource.DependentOf += $newDependObject
-                
             }
             else
             {
@@ -662,8 +707,11 @@ The following Resources of that type have been found: $($missingResource.Names -
             }
         }
     }
+
 #################################################
 # Gather TransientResources Dependencies
+# TransientResources only link to other resources via DependsOn
+# They are the only resource that link this way
 #################################################
     Write-Log -message "Gathering TransientResources Dependencies"
     foreach($stackObject in $stackTransientResourceObjects.Objects)
@@ -700,7 +748,8 @@ The following Resources of that type have been found: $($missingResource.Names -
             if($stackObject.FoundIn.Length -gt 0)
             {
                 $stackLayer = $managedStackArray | Where-Object { $_.Layer -eq $stackObject.Layer }
-                $exportObjectName = "$($stackSystemName)$($stackLayer.LayerName)$($stackLayer.Layer)$($stackObject.Name)$($foundObject.Name)"
+                $outputObjectName = "$($stackSystemName)$($stackLayer.LayerName)$($stackLayer.Layer)$($stackObject.Name)$($foundObject.Name)"
+                $exportObjectName = "export$($outputObjectName)"
                 $layersIn = @()
                 $layersIn = ($stackObject.FoundIn | Where-Object { $_.ObjectType -eq "Resources" } | Select-Object -ExpandProperty "Layer" | Where-Object { $_ -ne $stackObject.Layer } | Select-Object -Unique)
                 if($null -ne $layersIn)
@@ -726,10 +775,40 @@ The following Resources of that type have been found: $($missingResource.Names -
                             $previousPath = $splitPath[0..($splitPath.Length - 2)] -join "."
                             $rootObjectToModify = Get-PropertyObjectDynamic -object $stackObjectType -propertyPath $previousPath
                             $objectToModify = Get-PropertyObjectDynamic -object $stackObjectType -propertyPath $foundObject.Path
+                            
+                            ###################################
+                            # Review work on Fn::Sub
+                            # actually look 
+                            ###################################
+                            <#
+
                             $newSubObject = New-Object System.Object
                             $newSubObject | Add-Member -MemberType NoteProperty -Name "Fn::Sub" -Value $exportObjectName
                             $newImpObject = New-Object System.Object
                             $newImpObject | Add-Member -MemberType NoteProperty -Name "Fn::ImportValue" -Value $newSubObject
+
+                            Basic thought process is, is that if the Fn::Sub is used within the confines of an export or an import, 
+                                we need the value of the the passed either parameter or value that is being subbed.
+                            This can be anything from a ${AWS::Stackname} which is an aws controlled param replacement that uses the stack name,
+                                to ${ParameterName} which would then come from the parameter.
+                            This can also be used in Export Name generation (generated outside of what stack wrangler does).
+                                Generation such as an: 
+                                    "Export" : { "Name" : { "Fn::Sub" : "${AWS::StackName}-Something" } }
+                                    "Property" : { "Fn::ImportValue" :  { "Fn::Sub" : "${AWS::StackName}-Something" } }
+                            
+                            Importing values is weird:
+                            https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-importvalue.html
+
+                            I am handling it in the parameter section, but i need to do further testing to evaluate all Fn::Sub Cases
+                            https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-sub.html
+                            
+                            The above gives the multiple cases needed and check below for information regarding the handling of pseudo parameters
+                            https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/pseudo-parameter-reference.html
+
+                            #>
+                            
+                            $newImpObject = New-Object System.Object
+                            $newImpObject | Add-Member -MemberType NoteProperty -Name "Fn::ImportValue" -Value $exportObjectName
 
                             if(($stackLayer.Outputs.PsObject.Properties | Where-Object { $_.Name -eq $exportObjectName }).Length -eq 0)
                             {
@@ -740,7 +819,7 @@ The following Resources of that type have been found: $($missingResource.Names -
                                 $newOutputObject = New-Object System.Object
                                 $newOutputObject | Add-Member -MemberType NoteProperty -Name "Value" -Value (Clone-Object -objectToClone $newReferenceExportObject) 
                                 $newOutputObject | Add-Member -MemberType NoteProperty -Name "Export" -Value $newOutputExportObject
-                                $stackLayer.Outputs | Add-Member -MemberType NoteProperty -Name $exportObjectName -Value $newOutputObject
+                                $stackLayer.Outputs | Add-Member -MemberType NoteProperty -Name $outputObjectName -Value $newOutputObject
                             }
                             if($lastPath -match ".+?(\[[0-9]+\])$")
                             {
@@ -762,7 +841,7 @@ The following Resources of that type have been found: $($missingResource.Names -
 
 #################################################
 # Manage Resources that reference resources on the same layer
-# Creates Dependancy
+# Create DependsOn lists so that resoruces are created in the correct order
 #################################################
     Write-Log -message "Gathering Resources containing other Resources on the same layer"
     foreach($stackObject in $stackResourceObjects.Objects)
@@ -891,7 +970,7 @@ The following Resources of that type have been found: $($missingResource.Names -
 # Manage Conditions referenced by Conditions
 ##########################################
     Write-Log -message "Manage Conditions referenced by Conditions"
-    while (($stackConditionObjects.Objects | Where-Object { $_.Layer -eq 999 }).Length -gt 0)
+    while (($stackConditionObjects.Objects | Where-Object { $_.Layer -eq 9999 }).Length -gt 0)
     {
         foreach($stackObject in $stackConditionObjects.Objects)
         {
@@ -1015,7 +1094,7 @@ The following Resources of that type have been found: $($missingResource.Names -
 # Manage Outputs Referencing Conditions, Parameters, and Mappings
 ##########################################
     Write-Log -message "Manage Outputs referencing Conditions, Parameters, Mappings"
-    foreach($stackObject in ($stackOutputObjects.Objects | Where-Object { $_.Layer -eq 999 } ))
+    foreach($stackObject in ($stackOutputObjects.Objects | Where-Object { $_.Layer -eq 9999 } ))
     {
         if($null -ne $stackObject.Contains)
         {
@@ -1054,16 +1133,16 @@ The following Resources of that type have been found: $($missingResource.Names -
 # Manage TransientResources
 ##########################################
     Write-Log -message "Manage Transient Resources"
-    while(($stackTransientResourceObjects.Objects | Where-Object { $_.Layer -eq 999 }).Length -gt 0)
+    while(($stackTransientResourceObjects.Objects | Where-Object { $_.Layer -eq 9999 }).Length -gt 0)
     {
-        foreach($stackObject in $stackTransientResourceObjects.Objects | Where-Object { $_.Layer -eq 999 })
+        foreach($stackObject in $stackTransientResourceObjects.Objects | Where-Object { $_.Layer -eq 9999 })
         {
             $layersIn = @()
             $otherLayers = @()
             $layersIn = @($stackObject.DependentOf | Select-Object -ExpandProperty "Layer" | Select-Object -Unique)
             $layersIn += @($stackObject.DependsOn | Select-Object -ExpandProperty "Layer" | Select-Object -Unique)
-            $layersIn += @($stackObject.Contains  | Where-Object { $_.Layer -ne 999 } | Select-Object -ExpandProperty "Layer" | Select-Object -Unique)
-            $layersIn += @($stackObject.Foundin  | Where-Object { $_.Layer -ne 999 } | Select-Object -ExpandProperty "Layer" | Select-Object -Unique)
+            $layersIn += @($stackObject.Contains  | Where-Object { $_.Layer -ne 9999 } | Select-Object -ExpandProperty "Layer" | Select-Object -Unique)
+            $layersIn += @($stackObject.Foundin  | Where-Object { $_.Layer -ne 9999 } | Select-Object -ExpandProperty "Layer" | Select-Object -Unique)
             $layersIn = $layersIn | Select-Object -Unique | Sort-Object
             if($layersIn.Length -ne 0)
             {
@@ -1121,41 +1200,84 @@ The following Resources of that type have been found: $($missingResource.Names -
     {
         New-Item -Path $stackPath -ItemType "Directory" -Force | Out-Null
     }
-    $stackMetaData = New-Object System.Object
-    $stackMetaData | Add-Member -MemberType NoteProperty -Name "Layers" -Value @()
+    $stackMetadata = New-Object System.Object
+    $stackMetadata | Add-Member -MemberType NoteProperty -Name "Layers" -Value @()
+    $stackMetadata | Add-Member -MemberType NoteProperty -Name "Region" -Value $stackRegion
     foreach($stackLayer in $managedStackArray)
     {
         $stackLayerObject = New-Object System.Object
-        $stackFileName = "$($stackLayer.LayerName)_$($stackLayer.Layer.ToString()).json"
+        $stackFileName = "$($stackLayer.Layer.ToString())_$($stackLayer.LayerName).json"
         
-        $stackLayerMetaData = New-Object System.Object
-        $stackLayerMetaData | Add-Member -MemberType NoteProperty -Name "Name" -Value $stackLayer.LayerName
-        $stackLayerMetaData | Add-Member -MemberType NoteProperty -Name "Layer" -Value $stackLayer.Layer.ToString()
-
-        $stackMetaData.Layers += $stackLayerMetaData
+        $stackLayerMetadata = New-Object System.Object
+        $stackLayerMetadata | Add-Member -MemberType NoteProperty -Name "Name" -Value $stackLayer.LayerName
+        $stackLayerMetadata | Add-Member -MemberType NoteProperty -Name "Layer" -Value $stackLayer.Layer
+        $stackLayerMetadata | Add-Member -MemberType NoteProperty -Name "File" -Value $stackFileName
+        $stackMetadata.Layers += $stackLayerMetadata
         foreach($stackObjectType in $stackArchitecture)
         {
             if($null -ne $stackLayer."$($stackObjectType.Type)")
             {
                 $stackLayerObject | Add-Member -MemberType NoteProperty -Name $stackObjectType.Type -Value $stackLayer."$($stackObjectType.Type)"
-                if($stackObjectType.GenerateMetadata -eq "true")
+                if($stackObjectType.GenerateStackMetadata -eq "true")
                 {
-                    if(($stackMetaData.PsObject.Properties | Where-Object { $_.Name -eq "$($stackObjectType.Type)"}).Length -eq 0)
+                    if(($stackMetadata.PsObject.Properties | Where-Object { $_.Name -eq "$($stackObjectType.Type)"}).Length -eq 0)
                     {
-                        $stackMetaData | Add-Member -MemberType NoteProperty -Name "$($stackObjectType.Type)" -Value @()
+                        $stackMetadata | Add-Member -MemberType NoteProperty -Name "$($stackObjectType.Type)" -Value @()
                     }
                     foreach($stackObject in $stackLayer."$($stackObjectType.Type)".PsObject.Properties)
                     {
-                        $metaDataObject = New-Object System.Object
-                        $metaDataObject | Add-Member -MemberType NoteProperty -Name "Name" -Value "$($stackObject.Name)"
+                        $metadataObject = New-Object System.Object
+                        $metadataObject | Add-Member -MemberType NoteProperty -Name "Name" -Value "$($stackObject.Name)"
                         if($stackObjectType.Type -eq "Resources")
                         {
-                            $metaDataObject | Add-Member -MemberType NoteProperty -Name "Type" -Value $stackLayer."$($stackObjectType.Type)"."$($stackObject.Name)".Type
+                            $metadataObject | Add-Member -MemberType NoteProperty -Name "Type" -Value $stackLayer."$($stackObjectType.Type)"."$($stackObject.Name)".Type
                         }
-                        $metaDataObject | Add-Member -MemberType NoteProperty -Name "Layer" -Value $stackLayer.Layer
-                        $metaDataObject | Add-Member -MemberType NoteProperty -Name "LayerName" -Value $stackLayer.LayerName
-                        $metaDataObject | Add-Member -MemberType NoteProperty -Name "File" -Value $stackFileName
-                        $stackMetaData."$($stackObjectType.Type)" += $metaDataObject
+                        if($stackObjectType.Type -eq "Outputs")
+                        {
+                            $metadataObject | Add-Member -MemberType NoteProperty -Name "IsExport" -Value $false
+                            if(($stackObject.Value.PsObject.Properties | Where-Object { $_.Name -eq "Export" }).Length -gt 0)
+                            {
+                                $metadataObject.IsExport = $true
+
+                                if(($stackMetadata.PsObject.Properties | Where-Object { $_.Name -eq "Exports"}).Length -eq 0)
+                                {
+                                    $stackMetadata | Add-Member -MemberType NoteProperty -Name "Exports" -Value @()
+                                }
+                                $exportObject = New-Object System.Object
+                                $exportObject | Add-Member -MemberType NoteProperty -Name "Name" -Value $stackObject.Value.Export.Name
+                                $exportObject | Add-Member -MemberType NoteProperty -Name "Layer" -Value $stackLayer.Layer
+                                $exportObject | Add-Member -MemberType NoteProperty -Name "LayerName" -Value $stackLayer.LayerName
+                                $exportObject | Add-Member -MemberType NoteProperty -Name "File" -Value $stackFileName
+                                $stackMetadata.Exports += $exportObject
+                            }
+                        }
+                        $importFunctionPaths = Find-ObjectPropertiesRecursive -object $stackLayer."$($stackObjectType.Type)"."$($stackObject.Name)" -matchToken "^Fn\:\:ImportValue$"
+                        
+                        if($importFunctionPaths.Length -gt 0)
+                        {
+                            if(($stackMetadata.PsObject.Properties | Where-Object { $_.Name -eq "Imports"}).Length -eq 0)
+                            {
+                                $stackMetadata | Add-Member -MemberType NoteProperty -Name "Imports" -Value @()
+                            }
+                            foreach($importFunctionPath in $importFunctionPaths)
+                            {
+                                $importedValue = Get-PropertyObjectDynamic -object $stackLayer."$($stackObjectType.Type)"."$($stackObject.Name)" -propertyPath $importFunctionPath.Replace('$_.','')
+                                
+                                $importObject = New-Object System.Object
+                                $importObject | Add-Member -MemberType NoteProperty -Name "ObjectFoundOn" -Value $stackObject.Name
+                                $importObject | Add-Member -MemberType NoteProperty -Name "Layer" -Value $stackLayer.Layer
+                                $importObject | Add-Member -MemberType NoteProperty -Name "LayerName" -Value $stackLayer.LayerName
+                                $importObject | Add-Member -MemberType NoteProperty -Name "File" -Value $stackFileName
+                                $importObject | Add-Member -MemberType NoteProperty -Name "ImportedValue" -Value $importedValue
+                                $importObject | Add-Member -MemberType NoteProperty -Name "PathToImport" -Value "$($stackObjectType.Type).$($stackObject.Name).$($importFunctionPath.Replace('$_.','').Replace('.Fn::ImportValue',''))"
+
+                                $stackMetadata.Imports += $importObject
+                            }
+                        }
+                        $metadataObject | Add-Member -MemberType NoteProperty -Name "Layer" -Value $stackLayer.Layer
+                        $metadataObject | Add-Member -MemberType NoteProperty -Name "LayerName" -Value $stackLayer.LayerName
+                        $metadataObject | Add-Member -MemberType NoteProperty -Name "File" -Value $stackFileName
+                        $stackMetadata."$($stackObjectType.Type)" += $metadataObject
                     }
                 }
             }
@@ -1168,7 +1290,7 @@ The following Resources of that type have been found: $($missingResource.Names -
 ##########################################
 # Compress and add the current StackManagementConfig
 ##########################################
-    $stackManagementConfigurationBytes = [System.Text.Encoding]::UTF8.GetBytes($stackManagementText)
+    $stackManagementConfigurationBytes = [System.Text.Encoding]::UTF8.GetBytes((ConvertTo-Json -InputObject $stackManagementObject))
     $stackManagementMemoryStream = New-Object System.IO.MemoryStream
     $gZipStream = New-Object System.IO.Compression.GzipStream -ArgumentList $stackManagementMemoryStream, ([IO.Compression.CompressionMode]::Compress)
     $gZipStream.Write( $stackManagementConfigurationBytes, 0, $stackManagementConfigurationBytes.Length )
@@ -1176,14 +1298,16 @@ The following Resources of that type have been found: $($missingResource.Names -
     $stackManagementMemoryStream.Close()
     $compressedStackManagementConfiguration = $stackManagementMemoryStream.ToArray()
     $stackManagementConfigurationBase64Encode = [Convert]::ToBase64String($compressedStackManagementConfiguration)
-    $stackMetaData | Add-Member -MemberType NoteProperty -Name "StackConfiguration" -Value $stackManagementConfigurationBase64Encode
+    $stackMetadata | Add-Member -MemberType NoteProperty -Name "StackConfiguration" -Value $stackManagementConfigurationBase64Encode
     
 ##########################################
 # Output the Metadata file
 ##########################################
-    Write-Log -message "Writing Stack Metadata file to $($stackMetaDataFilePath)"
-    $stackMetaDataObjectString = ConvertTo-Json $stackMetaData -Depth 100
-    [IO.File]::WriteAllLines($stackMetaDataFilePath, $stackMetaDataObjectString, [System.Text.Encoding]::UTF8)
+    Write-Log -message "Writing Stack Metadata file to $($stackMetadataFilePath)"
+    $stackMetadataObjectString = ConvertTo-Json $stackMetadata -Depth 100
+    [IO.File]::WriteAllLines($stackMetadataFilePath, $stackMetadataObjectString, [System.Text.Encoding]::UTF8)
+
+    return (Load-WrangledStack -stackSystemName $stackSystemName)
 }
 
 <#
@@ -1200,63 +1324,66 @@ The following Resources of that type have been found: $($missingResource.Names -
   The Directory that the stack will be loaded from, used to override the Stack Management Configuration File's StackDirectory.
 
  .Parameter stackManagementConfigurationLocation
-  The path to the stack managementConfigurationFile.
+  The path to the stack management configuration file.
 #>
 function Load-WrangledStack 
 {
     param(
         [string] $stackSystemName = $null,
         [string] $stackDirectoryPath = $null,
+        [string] $stackManagementConfiguration, 
         [string] $stackManagementConfigurationLocation = "$($PSScriptRoot)\StackManagement.json"
     )
     $generateMetadata = $false
 
-    if(Test-Path $stackManagementConfigurationLocation)
-    {
-        $stackManagementFile = Get-Item $stackManagementConfigurationLocation
-        $stackManagementText = [System.IO.File]::ReadAllText($stackManagementFile)
-        $stackManagementObject = ConvertFrom-Json $stackManagementText
-        $stackArchitecture = $stackManagementObject.StackArchitecture
+#################################################
+# Load Stack Management Configuration
+#################################################
+    $stackManagementObject = Load-StackManagementConfiguration -stackManagementConfiguration $stackManagementConfiguration `
+                                                               -stackManagementConfigurationLocation $stackManagementConfigurationLocation
 
-        $stackDirectory = $stackManagementObject.StackDirectory
-        if(!([string]::IsNullOrEmpty($stackDirectoryPath)))
-        {
-            $stackPath = $stackDirectoryPath
-        }
-        else
-        {
-            $stackPath = Join-Path -Path $stackDirectory -ChildPath $stackSystemName
-        }
+#################################################
+# Gather data from Stack Management Configuration
+# Check for Metadata file
+#################################################
+    $stackArchitecture = $stackManagementObject.StackArchitecture
+    $stackDirectory = $stackManagementObject.StackDirectory
+    if(!([string]::IsNullOrEmpty($stackDirectoryPath)))
+    {
+        $stackPath = $stackDirectoryPath
     }
     else
     {
-        Write-ErrorLog -message "Unable to load Stack Management Configuration file: $($stackManagementConfigurationLocation)."    
+        $stackPath = Join-Path -Path $stackDirectory -ChildPath $stackSystemName
     }
-    
+
     $fullStackObject = New-Object System.Object
     $fullStackObject | Add-Member -MemberType NoteProperty -Name "StackSystemName" -Value $stackSystemName
     $fullStackObject | Add-Member -MemberType NoteProperty -Name "Stacks" -Value (New-Object System.Object)
     
     $stackFiles = Get-ChildItem -Path "$($stackPath)\*" -Filter "*.json" -Exclude "$($stackSystemName).metadata.json"
     
-    $metaDataFilePath = Join-Path -Path $stackPath -ChildPath "$($stackSystemName).metadata.json"
-    if(!(Test-Path $metaDataFilePath))
+    $metadataFilePath = Join-Path -Path $stackPath -ChildPath "$($stackSystemName).metadata.json"
+    if(!(Test-Path -Path $metadataFilePath))
     {
-        Write-WarningLog -message "The stack does not contain a metadata file, one will be generated"
+        Write-WarningLog -message "The stack does not contain a metadata file, one will be generated."
         $generateMetadata = $true
         $metadataObject = New-Object System.Object
     }
     else
     {
-        $metadataFile = Get-Item $metaDataFilePath
-        $metadataText = [System.IO.File]::ReadAllText($metaDataFile)
-        $metadataObject = ConvertFrom-Json $metaDataText
+        $metadataFile = Get-Item $metadataFilePath
+        $metadataText = [System.IO.File]::ReadAllText($metadataFile)
+        $metadataObject = ConvertFrom-Json $metadataText
     }
 
+#################################################
+# Load Stack Files into an object
+#################################################
     foreach($stackFilePath in $stackFiles)
     {
-        $stackLayername = ($stackFilePath.Name).Substring(0,($stackFilePath.Name).LastIndexOf("_"))
-        $stackLayer = ($stackFilePath.Name).Substring(($stackFilePath.Name).LastIndexOf("_") + 1, ($stackFilePath.Name).LastIndexOf(".") - 1 - ($stackFilePath.Name).LastIndexOf("_"))
+        $stackLayer = ($stackFilePath.Name).Substring(0,($stackFilePath.Name).LastIndexOf("_"))
+        $stackLayerName = ($stackFilePath.Name).Substring(($stackFilePath.Name).LastIndexOf("_") + 1, ($stackFilePath.Name).LastIndexOf(".") - 1 - ($stackFilePath.Name).LastIndexOf("_"))
         
         $fullStackObject.Stacks | Add-Member -MemberType NoteProperty -Name $stackLayername -Value (New-Object System.Object)
         $fullStackObject.Stacks."$($stackLayername)" | Add-Member -MemberType NoteProperty -Name "File" -Value $stackFilePath.Name
@@ -1272,16 +1399,23 @@ function Load-WrangledStack
         }
     }
 
+#################################################
+# Generate Metadatafile if None exists.
+#################################################
     if($generateMetadata)
     {
         $metadataObject | Add-Member -MemberType NoteProperty -Name "Layers" -Value @()
+        $metadataObject | Add-Member -MemberType NoteProperty -Name "Region" -Value $null
         foreach($stack in $fullStackObject.Stacks.PsObject.Properties)
         {
-            $stackLayerMetaData = New-Object System.Object
-            $stackLayerMetaData | Add-Member -MemberType NoteProperty -Name "Name" -Value $stack.Name
-            $stackLayerMetaData | Add-Member -MemberType NoteProperty -Name "Layer" -Value $fullStackObject.Stacks."$($stack.Name)".Layer
-            $metadataObject.Layers += $stackLayerMetaData
-            foreach($objectType in $stackArchitecture | Where-Object { $_.GenerateMetadata -eq "true"} | Select-Object -ExpandProperty "Type")
+            $stackLayerMetadata = New-Object System.Object
+            $stackLayerMetadata | Add-Member -MemberType NoteProperty -Name "Name" -Value $stack.Name
+            $stackLayerMetadata | Add-Member -MemberType NoteProperty -Name "Layer" -Value $null
+            $stackLayerMetadata.Layer = [int]$fullStackObject.Stacks."$($stack.Name)".Layer
+            $stackLayerMetadata | Add-Member -MemberType NoteProperty -Name "File" -Value $fullStackObject.Stacks."$($stack.Name)".File
+
+            $metadataObject.Layers += $stackLayerMetadata
+            foreach($objectType in $stackArchitecture | Where-Object { $_.GenerateStackMetadata -eq "true"} | Select-Object -ExpandProperty "Type")
             {
                 foreach($object in $fullStackObject.Stacks."$($stack.Name)"."$($objectType)".PsObject.Properties)
                 {
@@ -1290,14 +1424,62 @@ function Load-WrangledStack
                         $metadataObject | Add-Member -MemberType NoteProperty -Name $objectType -Value @()
                     }
                     $metadataRef = New-Object System.Object
-                    $metadataRef | Add-Member -MemberType NoteProperty -Name "Name" -Value $object.name
-                    $metadataRef | Add-Member -MemberType NoteProperty -Name "File" -Value $fullStackObject.Stacks."$($stack.Name)".File
+                    $metadataRef | Add-Member -MemberType NoteProperty -Name "Name" -Value $object.Name
+                    
                     if($objectType -eq "Resources")
                     {
                         $metadataRef | Add-Member -MemberType NoteProperty -Name "Type" -Value $fullStackObject.Stacks."$($stack.Name)"."$($objectType)"."$($object.Name)".Type
                     }
+
+                    if($objectType -eq "Outputs")
+                    {
+                        $metadataRef | Add-Member NoteProperty -Name "IsExport" -Value $false
+                        if(($fullStackObject.Stacks."$($stack.Name)"."$($objectType)"."$($object.Name)".PsObject.Properties | Where-Object { $_.Name -eq "Export" }).Length -gt 0)
+                        {
+                            $metadataRef.IsExport = $true
+
+                            if(($metadataObject.PsObject.Properties | Where-Object { $_.Name -eq "Exports"}).Length -eq 0)
+                            {
+                                $metadataObject | Add-Member -MemberType NoteProperty -Name "Exports" -Value @()
+                            }
+                            $exportObject = New-Object System.Object
+                            $exportObject | Add-Member -MemberType NoteProperty -Name "Name" -Value $fullStackObject.Stacks."$($stack.Name)"."$($objectType)"."$($object.Name)".Export.Name
+                            $exportObject | Add-Member -MemberType NoteProperty -Name "Layer" -Value $null
+                            $exportObject.Layer = [int]$fullStackObject.Stacks."$($stack.Name)".Layer
+                            $exportObject | Add-Member -MemberType NoteProperty -Name "LayerName" -Value $stack.Name
+                            $exportObject | Add-Member -MemberType NoteProperty -Name "File" -Value $fullStackObject.Stacks."$($stack.Name)".File
+                            $metadataObject.Exports += $exportObject
+                        }
+                    }
+
+                    $importFunctionPaths = Find-ObjectPropertiesRecursive -object $fullStackObject.Stacks."$($stack.Name)"."$($objectType)"."$($object.Name)" -matchToken "^Fn\:\:ImportValue$"
+
+                    if($importFunctionPaths.Length -gt 0)
+                    {
+                        if(($metadataObject.PsObject.Properties | Where-Object { $_.Name -eq "Imports"}).Length -eq 0)
+                        {
+                            $metadataObject | Add-Member -MemberType NoteProperty -Name "Imports" -Value @()
+                        }
+                        foreach($importFunctionPath in $importFunctionPaths)
+                        {
+                            $importedValue = Get-PropertyObjectDynamic -object $fullStackObject.Stacks."$($stack.Name)"."$($objectType)"."$($object.Name)" -propertyPath "$($importFunctionPath.Replace('$_.',''))"
+
+                            $importObject = New-Object System.Object
+                            $importObject | Add-Member -MemberType NoteProperty -Name "ObjectFoundOn" -Value $object.Name
+                            $importObject | Add-Member -MemberType NoteProperty -Name "Layer" -Value $null
+                            $importObject.Layer = [int]$fullStackObject.Stacks."$($stack.Name)".Layer
+                            $importObject | Add-Member -MemberType NoteProperty -Name "LayerName" -Value $stack.Name
+                            $importObject | Add-Member -MemberType NoteProperty -Name "File" -Value $fullStackObject.Stacks."$($stack.Name)".File
+                            $importObject | Add-Member -MemberType NoteProperty -Name "ImportedValue" -Value $importedValue
+                            $importObject | Add-Member -MemberType NoteProperty -Name "PathToImport" -Value "$($objectType).$($object.Name).$($importFunctionPath.Replace('$_.','').Replace('Fn::ImportValue',''))"
+
+                            $metadataObject.Imports += $importObject
+                        }
+                    }
+                    $metadataRef | Add-Member -MemberType NoteProperty -Name "Layer" -Value $null
+                    $metadataRef.Layer = [int]($fullStackObject.Stacks."$($stack.Name)".Layer)
                     $metadataRef | Add-Member -MemberType NoteProperty -Name "LayerName" -Value $stack.Name
-                    $metadataRef | Add-Member -MemberType NoteProperty -Name "Layer" -Value $fullStackObject.Stacks."$($stack.Name)".Layer
+                    $metadataRef | Add-Member -MemberType NoteProperty -Name "File" -Value $fullStackObject.Stacks."$($stack.Name)".File
                     $metadataObject."$($objectType)" += $metadataRef
                 }
             }
@@ -1307,12 +1489,16 @@ function Load-WrangledStack
             $metadataObject."$($metadataObjectProperty.Name)" = $metadataObject."$($metadataObjectProperty.Name)" | Sort-Object -Property "Layer", "Type", "Name"
         }
         $metadataObject | Add-Member -MemberType NoteProperty -Name "StackConfiguration" -Value $null
-        Write-Log -message "Writing Stack Metadata file to $($metaDataFilePath)"
-        $stackMetaDataObjectString = ConvertTo-Json $metadataObject -Depth 100
-        [IO.File]::WriteAllLines($metaDataFilePath, $stackMetaDataObjectString, [System.Text.Encoding]::UTF8)
+        Write-Log -message "Writing Stack Metadata file to $($metadataFilePath)"
+        $stackMetadataObjectString = ConvertTo-Json $metadataObject -Depth 100
+        [IO.File]::WriteAllLines($metadataFilePath, $stackMetadataObjectString, [System.Text.Encoding]::UTF8)
     }
 
-    $fullStackObject | Add-Member -MemberType NoteProperty -Name "Metadata" -Value $metaDataObject
+#################################################
+# Return the Stack Data
+# Decompress and decode the stack configuration
+#################################################
+    $fullStackObject | Add-Member -MemberType NoteProperty -Name "Metadata" -Value $metadataObject
     $fullStackObject | Add-Member -MemberType NoteProperty -Name "StackConfiguration" -Value $null
     if($null -ne $metadataObject.StackConfiguration)
     {
@@ -1343,7 +1529,7 @@ function Load-WrangledStack
   The Directory that the stack will be loaded from, used to override the Stack Management Configuration File's StackDirectory.
 
  .Parameter stackManagementConfigurationLocation
-  The path to the stack managementConfigurationFile.
+  The path to the stack management configuration file.
 #>
 function Find-InWrangledStack
 {
@@ -1360,8 +1546,11 @@ function Find-InWrangledStack
     $stackObjectMatched = @()
     if(!([string]::IsNullOrWhiteSpace($stackSystemName)) -and $null -eq $stackObject)
     {
-        if(Test-Path $stackManagementConfigurationLocation)
+        if(Test-Path -Path $stackManagementConfigurationLocation)
         {
+            #################################################
+            # Load configuration needs to be done here
+            #################################################
             $stackManagementFile = Get-Item $stackManagementConfigurationLocation
             $stackManagementText = [System.IO.File]::ReadAllText($stackManagementFile)
             $stackManagementObject = ConvertFrom-Json $stackManagementText
@@ -1371,14 +1560,14 @@ function Find-InWrangledStack
                 $stackDirectory = $stackOutputDirectoryPath
             }
             $stackPath = Join-Path -Path $stackDirectory -ChildPath $stackSystemName
-            $metaDataFilePath = Join-Path -Path $stackPath -ChildPath "$($stackSystemName).metadata.json"
-            if(!(Test-Path $metaDataFilePath))
+            $metadataFilePath = Join-Path -Path $stackPath -ChildPath "$($stackSystemName).metadata.json"
+            if(!(Test-Path -Path $metadataFilePath))
             {
-                Write-ErrorLog -message "Unable to locate Metadata File: $($metaDataFilePath)." 
+                Write-ErrorLog -message "Unable to locate Metadata File: $($metadataFilePath)." 
             }
-            $metaDataFile = Get-Item $metaDataFilePath
-            $metaDataText = [System.IO.File]::ReadAllText($metaDataFile)
-            $metaDataObject = ConvertFrom-Json $metaDataText
+            $metadataFile = Get-Item $metadataFilePath
+            $metadataText = [System.IO.File]::ReadAllText($metadataFile)
+            $metadataObject = ConvertFrom-Json $metadataText
         }
         else
         {
@@ -1393,19 +1582,19 @@ function Find-InWrangledStack
         }
         else
         {
-            $metaDataObject = $stackObject.Metadata
+            $metadataObject = $stackObject.Metadata
         }
     }
-    if($null -ne $metaDataObject."$($objectType)" -or $objectType -eq "Any")
+    if($null -ne $metadataObject."$($objectType)" -or $objectType -eq "Any")
     {       
         if(!([string]::IsNullOrWhiteSpace($resourceType)))
         {
             if($objectType -eq "Any")
             {
-                foreach($objectAnyType in $metaDataObject.PsObject.Properties.Name)
+                foreach($objectAnyType in $metadataObject.PsObject.Properties.Name)
                 {
                     $objectsMatched = @()
-                    $objectsMatched = $metaDataObject."$($objectAnyType)" | Where-Object { $_.Type -eq $resourceType -and $_.Name -match $searchString }
+                    $objectsMatched = $metadataObject."$($objectAnyType)" | Where-Object { $_.Type -eq $resourceType -and $_.Name -match $searchString }
                     if($objectsMatched.Count -ne 0)
                     {
                         $objectsMatchedRef = New-Object System.Object
@@ -1418,7 +1607,7 @@ function Find-InWrangledStack
             else
             {
                 $objectsMatched = @()
-                $objectsMatched = $metaDataObject."$($objectType)" | Where-Object { $_.Type -eq $resourceType -and $_.Name -match $searchString }
+                $objectsMatched = $metadataObject."$($objectType)" | Where-Object { $_.Type -eq $resourceType -and $_.Name -match $searchString }
                 if($objectsMatched.Count -ne 0)
                 {
                     $objectsMatchedRef = New-Object System.Object
@@ -1432,10 +1621,10 @@ function Find-InWrangledStack
         {
             if($objectType -eq "Any")
             {
-                foreach($objectAnyType in $metaDataObject.PsObject.Properties.Name)
+                foreach($objectAnyType in $metadataObject.PsObject.Properties.Name)
                 {
                     $objectsMatched = @()
-                    $objectsMatched += $metaDataObject."$($objectAnyType)" | Where-Object { $_.Name -match $searchString }
+                    $objectsMatched += $metadataObject."$($objectAnyType)" | Where-Object { $_.Name -match $searchString }
                     if($objectsMatched.Count -ne 0)
                     {
                         $objectsMatchedRef = New-Object System.Object
@@ -1448,7 +1637,7 @@ function Find-InWrangledStack
             else
             {
                 $objectsMatched = @()
-                $objectsMatched += $metaDataObject."$($objectType)" | Where-Object { $_.Name -match $searchString }
+                $objectsMatched += $metadataObject."$($objectType)" | Where-Object { $_.Name -match $searchString }
                 if($objectsMatched.Count -ne 0)
                 {
                     $objectsMatchedRef = New-Object System.Object
@@ -1489,16 +1678,352 @@ function Find-InWrangledStack
 }
 
 
-function Save-Stack
+function Load-StackKeyRing
 {
-    param
-    {
-        [System.Object] $stackObject,
+    param (
+        [string] $stackManagementConfiguration = $null,
         [string] $stackManagementConfigurationLocation = "$($PSScriptRoot)\StackManagement.json"
+    )
+
+#################################################
+# Load Stack Management Configuration
+#################################################
+    $stackManagementObject = Load-StackManagementConfiguration -stackManagementConfiguration $stackManagementConfiguration `
+                                                               -stackManagementConfigurationLocation $stackManagementConfigurationLocation
+
+    $stackKeyRingConfigurationLocation = $stackManagementObject.StackKeyRingLocation
+    if(!(Test-Path -Path $stackKeyRingConfigurationLocation))
+    {
+        Write-ErrorLog -message "Unable to load StackKeyRing Location as defined by the Stack Management: $($stackKeyRingLocation)"
+    }
+    else 
+    {
+#################################################
+# Load Stack Key Ring Configuration
+#################################################
+        try
+        {
+            Write-Log -message "Loading StackKeyRingConfiguration from file: $($stackKeyRingConfigurationLocation)."
+            $stackKeyRingFile = Get-Item $stackKeyRingConfigurationLocation
+            $stackKeyRingText = [System.IO.File]::ReadAllText($stackKeyRingFile)
+            $stackKeyRingObject = ConvertFrom-Json $stackKeyRingText
+            $argumentsObject = $stackKeyRingObject.StackKeyRing.VersionControlSystem.ArgumentsObject
+            $argumentsObjectHashTable = @{}
+            foreach($argumentObject in $argumentsObject.PsObject.Properties)
+            {
+                $argumentsObjectHashTable.Add($argumentsObject.Name, $argumentsObject.Value)
+            }
+            $stackKeyRingObject.StackKeyRing.VersionControlSystem.ArgumentsObject = $argumentsObjectHashTable
+        }
+        catch
+        {
+            Write-ErrorLog -message "Issues occured loading the stackManagementConfigurationLocation: $($stackKeyRingConfigurationLocation): $($Error)"
+        }
+        return $stackKeyRingObject
+    }
+}
+
+function  Generate-StackKeyRing
+{
+    param (
+        [string] $stackKeyRingLocation = "",
+        [switch] $overwriteExistingStackKeyRing,
+        [string] $amazonAccountFileLocation = "",
+        [string] $amazonAccountName = "",
+        [string] $amazonAccessKey = "",
+        [string] $amazonSecretKey = "",
+        [string] $versionControlExecutableLocation = "",
+        [hashtable] $versionControlArgumentsHashTable = $null
+    )
+
+    if(Test-Path -Path $stackKeyRingLocation)
+    {
+        if($overwriteExistingStackKeyRing)
+        {
+            Write-WarningLog -message "Overwriting existing stack key ring: $($stackKeyRingLocation)"
+            Remove-Item -Path $stackKeyRingLocation -Force
+        }
+        else 
+        {
+            Write-ErrorLog -message "Stack key ring exists in $($stackKeyRingLocation)"
+        }
     }
 
-    if($stackObject)
+    $keyRingObject = New-Object System.Object
+
+    $keyRingObject | Add-Member -MemberType NoteProperty -Name "StackKeyRing" -Value (New-Object System.Object)
+    $keyRingObject.StackKeyRing | Add-Member -MemberType NoteProperty -Name "Amazon" -Value (New-Object System.Object)
+    $keyRingObject.StackKeyRing | Add-Member -MemberType NoteProperty -Name "VersionControlSystem" -Value (New-Object System.Object)
+    if(!([string]::IsNullOrWhiteSpace($amazonAccountFileLocation)) -and (Test-Path -Path $amazonAccountFileLocation))
+    {
+        $keyRingObject.StackKeyRing.Amazon | Add-Member -MemberType NoteProperty -Name "AccountFile" -Value $amazonAccountFileLocation
+    }
+    if(![string]::IsNullOrWhiteSpace($amazonAccountName))
+    {
+        $keyRingObject.StackKeyRing.Amazon | Add-Member -MemberType NoteProperty -Name "AccountName" -Value $amazonAccountName
+    }
+    if(![string]::IsNullOrWhiteSpace($amazonAccessKey))
+    {
+        $encryptedAccessKey = Encrypt-LikeAws -valueToEncrypt $amazonAccessKey
+        $keyRingObject.StackKeyRing.Amazon | Add-Member -MemberType NoteProperty -Name "AccountAccessKey" -Value $encryptedAccessKey
+    }
+    if(![string]::IsNullOrWhiteSpace($amazonSecretKey))
+    {
+        $encryptedSecretKey = Encrypt-LikeAws -valueToEncrypt $amazonSecretKey
+        $keyRingObject.StackKeyRing.Amazon | Add-Member -MemberType NoteProperty -Name "AccountSecretKey" -Value $encryptedSecretKey
+    }
+    if(![string]::IsNullOrWhiteSpace($versionControlExecutableLocation))
+    {
+        $keyRingObject.StackKeyRing.VersionControlSystem | Add-Member -MemberType NoteProperty -Name "ExecutablePath" -Value $versionControlExecutableLocation
+    }
+    if($null -ne $versionControlArgumentsObject)
+    {
+        $versionControlArgumentsHashTableUpdate = @{}
+        foreach($key in $versionControlArgumentsHashTable.Keys)
+        {
+            if($versionControlArgumentsHashTable[$key] -match "\#\{Encrypt\}")
+            {
+                $scrubbedValue = $versionControlArgumentsHashTable[$key].Replace("#{Encrypt}","")
+                $encryptedValue = Encrypt-LikeAws -valueToEncrypt $scrubbedValue 
+                $versionControlArgumentsHashTableUpdate.Add($key, "#{Enc}$($encryptedValue)")
+            }
+            else
+            {
+                $versionControlArgumentsHashTableUpdate.Add($key, $versionControlArgumentsHashTable[$key])
+            }
+        }
+        $keyRingObject.StackKeyRing.VersionControlSystem | Add-Member -MemberType NoteProperty -Name "ArgumentsObject" -Value $versionControlArgumentsHashTableUpdate
+    }
+
+    $keyRingObjectString = ConvertTo-Json -InputObject $keyRingObject -Depth 100
+    [IO.File]::WriteAllLines($stackKeyRingLocation, $keyRingObjectString, [System.Text.Encoding]::UTF8)
+}
+
+function Push-WrangledStack
+{
+    param (
+        [string] $stackSystemName,
+        [array] $parameterHashArray = @(),
+        [string] $failureOption = "ROLLBACK",
+        [string] $iamCapability = @("","",""),
+        [string] $stackDirectory = $null,
+        [string] $stackManagementConfiguration = $null,
+        [string] $stackManagementConfigurationLocation = "$($PSScriptRoot)\StackManagement.json"
+    )
+
+#################################################
+# Load Stack Management Configuration
+#################################################
+    $stackManagementObject = Load-StackManagementConfiguration -stackManagementConfiguration $stackManagementConfiguration `
+                                                               -stackManagementConfigurationLocation $stackManagementConfigurationLocation
+
+#################################################
+# Load Stack
+#################################################
+    $stackData = Load-WrangledStack -stackSystemName $stackSystemName `
+                                    -stackDirectoryPath $stackDirectory
+
+#################################################
+# Load Stack Key Ring Configuration
+#################################################
+    $stackKeyRingObject = Load-StackKeyRing -stackManagementConfiguration $stackManagementConfiguration `
+                                            -stackManagementConfigurationLocation $stackManagementConfigurationLocation
+
+
+#################################################
+# Set the Aws Credentials 
+# Either from the file or the access keys provided
+#################################################
+    if(($stackKeyRingObject.StackKeyRing.Amazon.PsObject.Properties | Where-Object { $_.Name -eq "AccountAccessKey" }).Count -eq 1 -and ($stackKeyRingObject.StackKeyRing.Amazon.PsObject.Properties | Where-Object { $_.Name -eq "AccountSecretKey" }).Count -eq 1)
+    {
+        $encryptedAccessKey = $stackKeyRingObject.StackKeyRing.Amazon.AccountAccessKey 
+        $encryptedSecretKey = $stackKeyRingObject.StackKeyRing.Amazon.AccountSecretKey 
+        Set-AWSCredential -AccessKey (Decrypt-LikeAws -valueToDecrypt $encryptedAccessKey) `
+                          -SecretKey (Decrypt-LikeAws -valueToDecrypt $encryptedSecretKey)
+    }
+    else 
+    {
+        Set-AwsCredential -ProfileName $stackKeyRingObject.StackKeyRing.Amazon.AccountName `
+                          -ProfileLocation $stackKeyRingObject.StackKeyRing.Amazon.AccountFile
+    }
+
+#################################################
+# Gather Base Data needed for replacement
+#################################################
+    $region = $metadataObject.Region
+    $metadataObject = $stackData.Metadata
+    $pseudoParameterArray = $stackData.PseudoParameters
+    
+#################################################
+# Start looping and pushing Layers
+#################################################
+    foreach($metadataLayer in $metadataObject.Layers | Sort-Object { $_.Layer })
     {
 
+#################################################
+# Load the Stack File
+# Name the layer
+# Gather imports
+#################################################
+        $stackPath = Join-Path -Path (Join-Path -Path $stackManagementObject.StackDirectory -ChildPath $stackSystemName) -ChildPath $metadataLayer.File
+        $loadedStackFile = Get-Item $stackPath
+        $loadedStackText = [System.IO.File]::ReadAllText($loadedStackFile)
+        $loadedStackObject = ConvertFrom-Json $loadedStackText
+
+        $cloudformationStackAndLayer = "$($stackSystemName)-$($metadataLayer.Layer)-$($metadataLayer.Name)"
+        $imports = $metadataObject.Imports | Where-Object { $_.Layer -eq $metadataLayer.Layer }
+
+#################################################
+# Load the Stack File
+# Name the layer
+# Gather imports
+#################################################      
+        foreach($import in $imports)
+        {
+            $export = Get-CFNExport | Where-Object { $_.Name -eq $import.ImportedValue }
+            $splitPath = $import.PathToImport.Split(".")
+            $lastPath = $splitPath[-1]
+            $previousPath = $splitPath[0..($splitPath.Length - 2)] -join "."
+
+            $importingObject = Get-PropertyObjectDynamic -object $loadedStackObject -propertyPath $previousPath
+
+            if($lastPath -match ".+?(\[[0-9]+\])$")
+            {
+                $lastPathSplit = $lastPath.Split("[")
+                $lastPathProperty = $lastPathSplit[0]
+                $position = $lastPathSplit[1].TrimEnd("]")
+                $importingObject."$($lastPathProperty)"[$position] = $export.Value
+            }
+            else
+            {
+                $importingObject."$($lastPath)" = $export.Value
+            }
+
+#################################################
+# I dont think ill need this, 
+# Imports should only be derived by the stack generation
+# Those do not contain Fn::Sub
+# Any imports that contain Fn::Sub are probably a bad time
+#################################################  
+            # if($lastPath -match ".+?(\[[0-9]+\])$")
+            # {
+            #     $lastPathSplit = $lastPath.Split("[")
+            #     $lastPathProperty = $lastPathSplit[0]
+            #     $position = $lastPathSplit[1].TrimEnd("]")
+            #     $importingObject."$($lastPathProperty)"[$position] = $export.Value
+            #     if(($importingObject."$($lastPathProperty)"[$position]."Fn::ImportValue".PsObject.Properties | Where-Object { $_.Name -eq "Fn::Sub" }).Length -gt 0)
+            #     {
+            #         $subValue = $importingObject."$($lastPathProperty)"[$position]."Fn::ImportValue"."Fn::Sub"
+            #         foreach($pseudoParameter in $pseudoParameterArray)
+            #         {
+            #             if($subValue -match ("\$\{$($pseudoParameter.Name -replace ":", "\:" )\}"))
+            #             {
+            #                 if(($pseudoParameter.PsObject.Properties | Where-Object { $_.Name -eq "Value"}).Length -gt 0)
+            #                 {
+            #                     $subValue -replace "\$\{$($pseudoParameter.Name)\}", $pseudoParameter.Value
+            #                 }
+            #                 elseif(($pseudoParameter.PsObject.Properties | Where-Object { $_.Name -eq "Function"}).Length -gt 0)
+            #                 {
+            #                     $subValue -replace "\$\{$($pseudoParameter.Name)\}", (Invoke-Expression -Command $pseudoParameter.Function)
+            #                 }
+            #                 else
+            #                 {
+            #                     Write-ErrorLog -message "Missing Something"
+            #                 }
+            #             }
+            #         }
+            #         foreach($paramaterHash in $parameterHashArray)
+            #         {
+            #             if($subValue -match ("\$\{$($paramaterHash.Keys)\}"))
+            #             {
+            #                 $subValue -replace "\$\{$($paramaterHash.Keys)\}", $paramaterHash.Value
+            #             }
+            #         }
+            #         if($subValue -match "\$\{.+\}")
+            #         {
+            #             Write-ErrorLog -message "Missing Substitues: $($match -join ', ')"
+            #         }
+            #         else 
+            #         {
+            #             $importingObject."$($lastPathProperty)"[$position]."Fn::ImportValue" = $subValue
+            #         }
+            #     }
+            #     else
+            #     {
+            #         $importingObject."$($lastPathProperty)"[$position] = $export.Value
+            #     }
+            # }
+            # else
+            # {
+            #     $importingObject."$($lastPath)" = $export.Value
+            #     if(($importingObject."$($lastPath)"."Fn::ImportValue".PsObject.Properties | Where-Object { $_.Name -eq "Fn::Sub" }).Length -gt 0)
+            #     {
+            #         $subValue = $importingObject."$($lastPath)"."Fn::ImportValue"."Fn::Sub"
+            #         foreach($pseudoParameter in $pseudoParameterArray)
+            #         {
+            #             if($subValue -match ("\$\{$($pseudoParameter.Name -replace ":", "\:" )\}"))
+            #             {
+            #                 if(($pseudoParameter.PsObject.Properties | Where-Object { $_.Name -eq "Value"}).Length -gt 0)
+            #                 {
+            #                     $subValue -replace "\$\{$($pseudoParameter.Name)\}", $pseudoParameter.Value
+            #                 }
+            #                 elseif(($pseudoParameter.PsObject.Properties | Where-Object { $_.Name -eq "Function"}).Length -gt 0)
+            #                 {
+            #                     $subValue -replace "\$\{$($pseudoParameter.Name)\}", (Invoke-Expression -Command $pseudoParameter.Function)
+            #                 }
+            #                 else
+            #                 {
+            #                     Write-ErrorLog -message "Missing Something"
+            #                 }
+            #             }
+            #         }
+            #         foreach($paramaterHash in $parameterHashArray)
+            #         {
+            #             if($subValue -match ("\$\{$($paramaterHash.Keys)\}"))
+            #             {
+            #                 $subValue -replace "\$\{$($paramaterHash.Keys)\}", $paramaterHash.Value
+            #             }
+            #         }
+            #         if($subValue -match "\$\{.+\}")
+            #         {
+            #             Write-ErrorLog -message "Missing Substitues: $($match -join ', ')"
+            #         }
+            #         else 
+            #         {
+            #             $importingObject."$($lastPath)"."Fn::ImportValue" = $subValue
+            #         } 
+            #     }
+            #     else
+            #     {
+            #         $importingObject."$($lastPath)" = $export.Value
+            #     }
+            # }
+        }
+        try
+        {
+            $cfnStackObject = $null
+            $cfnStackObject = Get-CFNStack -StackName $cloudformationStackAndLayer -Region $region
+            Write-Log -message "Stack $($cloudformationStackAndLayer) already exists, it will be updated."
+        }
+        catch
+        {
+            Write-Log -message "Stack $($cloudformationStackAndLayer) does not exist, it will be created."
+        }
+        if($null -eq $cfnStackObject)
+        {
+            New-CFNStack -StackName $cloudformationStackAndLayer `
+                         -Region $region `
+                         -TemplateBody (ConvertTo-Json $loadedStackObject) `
+                         -Parameter $parameterHashArray `
+                         -Capability $iamCapability
+        }
+        else
+        {
+            Update-CFNStack -StackName $cloudformationStackAndLayer `
+                            -Region $region `
+                            -TemplateBody (ConvertTo-Json $loadedStackObject) `
+                            -Parameter $parameterHashArray `
+                            -Capability $iamCapability
+        }
     }
 }

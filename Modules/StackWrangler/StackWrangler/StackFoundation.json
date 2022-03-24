@@ -1,0 +1,143 @@
+{
+    "StackDirectory" : "C:\\ChadRoesler_Workspace\\Stacks",
+    "StackKeyRingLocation" : "StackKeyRing.json",
+    "StackDefaultRegion" : "us-east-2",
+    "TransientResources":  [
+        "AWS::CloudFormation::WaitCondition",
+        "AWS::CloudFormation::WaitConditionHandle"
+    ],
+    "ReferencedObjectsMap" : [
+        {
+            "ObjectType" : "Resources",
+            "ReferenceTypes" : [
+                {
+                    "Name" : "Fn::GetAtt",
+                    "Type" : "System.Object[]",
+                    "ReferenceAt" : "0"
+                },
+                {
+                    "Name" : "Ref",
+                    "Type" : "System.String"
+                }
+            ],
+            "FoundIn" : [
+                "Resources",
+                "Outputs",
+                "TransientResources"
+            ],
+            "Contains" : [
+                "Parameters",
+                "Mappings",
+                "Conditions",
+                "Resources"
+            ]
+        },
+        {
+            "ObjectType" : "Parameters",
+            "ReferenceTypes" : [
+                {
+                    "Name" : "Ref",
+                    "Type" : "System.String"
+                },
+                {
+                    "Name" : "Fn::Sub",
+                    "Type" : "System.String",
+                    "SearchString" : "\\$\\{ResourceName\\}"
+                }
+            ],
+            "FoundIn" : [
+                "Outputs",
+                "Conditions",
+                "Resources"
+            ]
+        },
+        {
+            "ObjectType" : "Mappings",
+            "ReferenceTypes" : [
+                {
+                    "Name" : "Fn::FindInMap",
+                    "Type" : "System.Object[]",
+                    "ReferenceAt" : "0"
+                }
+            ],
+            "FoundIn" : [
+                "Outputs",
+                "Resources",
+                "Conditions"
+            ]
+        },
+        {
+            "ObjectType" : "Conditions",
+            "ReferenceTypes" : [
+                {
+                    "Name" : "Condition",
+                    "Type" : "System.String"
+                },
+                {
+                    "Name" : "Fn::If",
+                    "Type" : "System.Object[]",
+                    "ReferenceAt" : "0"
+                }
+            ],
+            "FoundIn" : [
+                "Conditions",
+                "Outputs",
+                "Resources",
+                "TransientResources"
+            ],
+            "Contains" : [
+                "Parameters",
+                "Mappings",
+                "Conditions"
+            ]
+        },
+        {
+            "ObjectType" : "Outputs",
+            "Contains" : [
+                "Parameters",
+                "Mappings",
+                "Conditions",
+                "Resources"
+            ]
+        },
+        {
+            "ObjectType" : "TransientResources",
+            "ReferenceTypes" : [
+                {
+                    "Name" : "Ref",
+                    "Type" : "System.String"
+                }
+            ],
+            "Contains" : [
+                "Conditions",
+                "Resources",
+                "TransientResources"
+            ],
+            "FoundIn" : [
+                "TransientResources"
+            ]
+        }
+    ],
+    "PseudoParameters" : [
+        {
+            "Name" : "AWS::AccountId",
+            "Function" : "(Get-STSCallerIdentity).UserId"
+        },
+        {
+            "Name" : "AWS::NoValue",
+            "Value" : ""
+        },
+        {
+            "Name" : "AWS::URLSuffix",
+            "Value" : "amazonaws.com"
+        },
+        {
+            "Name" : "AWS::Partition",
+            "Value" : "aws"
+        },
+        {
+            "Name" : "AWS::Partition",
+            "Value" : "aws"
+        }
+    ]
+}

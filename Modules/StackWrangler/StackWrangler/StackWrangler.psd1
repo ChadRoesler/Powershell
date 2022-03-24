@@ -67,7 +67,8 @@ Copyright = '(c) 2019 A0r029. All rights reserved.'
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
 NestedModules = @('..\..\ObjectManagement\ObjectManagement.psd1', 
-               '..\..\Logging\Logging.psd1')
+               '..\..\Logging\Logging.psd1',
+               '..\..\AwsCryptography\AwsCryptography.psd1')
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
 FunctionsToExport = '*'

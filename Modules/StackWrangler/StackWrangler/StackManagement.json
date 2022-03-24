@@ -1,44 +1,47 @@
 {
-    "StackDirectory" : "C:\\ChadRoesler_Workspace\\Stacks",
-    "StackKeyRingLocation" : "StackKeyRing.json",
     "StackArchitecture" : [
         {
             "Type" : "AWSTemplateFormatVersion",
             "Order" : 0,
-            "GenerateMetadata" : "false"
+            "GenerateStackMetadata" : "false"
+        },
+        {
+            "Type" : "Metadata",
+            "Order" : 1,
+            "GenerateStackMetadata" : "false"
         },
         {
             "Type" : "Description",
-            "Order" : 1,
-            "GenerateMetadata" : "false"
+            "Order" : 2,
+            "GenerateStackMetadata" : "false"
         },
         {
             "Type" : "Parameters",
-            "Order" : 2,
-            "GenerateMetadata" : "true"
+            "Order" : 3,
+            "GenerateStackMetadata" : "true"
         },
         {
             "Type" : "Mappings",
-            "Order" : 2,
-            "GenerateMetadata" : "true"
+            "Order" : 4,
+            "GenerateStackMetadata" : "true"
         },
         {
             "Type" : "Conditions",
-            "Order" : 4,
-            "GenerateMetadata" : "true"
+            "Order" : 5,
+            "GenerateStackMetadata" : "true"
         },
         {
             "Type" : "Resources",
-            "Order" : 5,
-            "GenerateMetadata" : "true"
+            "Order" : 6,
+            "GenerateStackMetadata" : "true"
         },
         {
             "Type" : "Outputs",
-            "Order" : 6,
-            "GenerateMetadata" : "true"
+            "Order" : 7,
+            "GenerateStackMetadata" : "true"
         }
     ],
-    "Remove" : [
+    "RootObjectRemoval" : [
         "Metadata"
     ],
     "ResourceLayers" : [
@@ -162,16 +165,42 @@
         },
         {
             "Layer" : 3,
-            "LayerName" : "CodeLayer",
+            "LayerName" : "BucketFilesLayer",
             "Resources" : [
                 {
-                    "Type" : "AWS::Lambda::Function",
-                    "Order" : 3
+                    "Type" : "Local::Keys::Folders",
+                    "Order" : 1
+                },
+                {
+                    "Type" : "Local::Keys::Files",
+                    "Order" : 2
                 }
             ]
         },
         {
             "Layer" : 4,
+            "LayerName" : "AutomationLayer",
+            "Resources" : [
+                {
+                    "Type" : "AWS::SSM::Document",
+                    "Order" : 1
+                },
+                {
+                    "Type" : "AWS::SSM::Parameter",
+                    "Order" : 2
+                },
+                {
+                    "Type" : "AWS::Lambda::Function",
+                    "Order" : 3
+                },
+                {
+                    "Type" : "AWS::Inspector::ResourceGroup",
+                    "Order" : 4
+                }
+            ]
+        },
+        {
+            "Layer" : 5,
             "LayerName" : "MachineLayer",
             "Resources" : [
                 {
@@ -198,122 +227,6 @@
                     "Type" : "AWS::EC2::LaunchTemplate",
                     "Order" : 10
                 }
-            ]
-        }
-    ],
-    "TransientResources":  [
-        "AWS::CloudFormation::WaitCondition",
-        "AWS::CloudFormation::WaitConditionHandle"
-    ],
-    "ReferencedObjectsMap" : [
-        {
-            "ObjectType" : "Resources",
-            "ReferenceTypes" : [
-                {
-                    "Name" : "Fn::GetAtt",
-                    "Type" : "System.Object[]",
-                    "ReferenceAt" : "0"
-                },
-                {
-                    "Name" : "Ref",
-                    "Type" : "System.String"
-                }
-            ],
-            "FoundIn" : [
-                "Resources",
-                "Outputs",
-                "TransientResources"
-            ],
-            "Contains" : [
-                "Parameters",
-                "Mappings",
-                "Conditions",
-                "Resources"
-            ]
-        },
-        {
-            "ObjectType" : "Parameters",
-            "ReferenceTypes" : [
-                {
-                    "Name" : "Ref",
-                    "Type" : "System.String"
-                },
-                {
-                    "Name" : "Fn::Sub",
-                    "Type" : "System.String",
-                    "SearchString" : "\\$\\{ResourceName\\}"
-                }
-            ],
-            "FoundIn" : [
-                "Outputs",
-                "Conditions",
-                "Resources"
-            ]
-        },
-        {
-            "ObjectType" : "Mappings",
-            "ReferenceTypes" : [
-                {
-                    "Name" : "Fn::FindInMap",
-                    "Type" : "System.Object[]",
-                    "ReferenceAt" : "0"
-                }
-            ],
-            "FoundIn" : [
-                "Outputs",
-                "Resources",
-                "Conditions"
-            ]
-        },
-        {
-            "ObjectType" : "Conditions",
-            "ReferenceTypes" : [
-                {
-                    "Name" : "Condition",
-                    "Type" : "System.String"
-                },
-                {
-                    "Name" : "Fn::If",
-                    "Type" : "System.Object[]",
-                    "ReferenceAt" : "0"
-                }
-            ],
-            "FoundIn" : [
-                "Conditions",
-                "Outputs",
-                "Resources",
-                "TransientResources"
-            ],
-            "Contains" : [
-                "Parameters",
-                "Mappings",
-                "Conditions"
-            ]
-        },
-        {
-            "ObjectType" : "Outputs",
-            "Contains" : [
-                "Parameters",
-                "Mappings",
-                "Conditions",
-                "Resources"
-            ]
-        },
-        {
-            "ObjectType" : "TransientResources",
-            "ReferenceTypes" : [
-                {
-                    "Name" : "Ref",
-                    "Type" : "System.String"
-                }
-            ],
-            "Contains" : [
-                "Conditions",
-                "Resources",
-                "TransientResources"
-            ],
-            "FoundIn" : [
-                "TransientResources"
             ]
         }
     ]

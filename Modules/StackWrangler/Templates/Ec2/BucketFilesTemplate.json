@@ -1,0 +1,13 @@
+{
+    "Resources" : {
+        "#{LocalBucketFile}" : {
+            "Type" : "Local::Keys::Files",
+            "Properties" : {
+                "FileType" : "#{FileType}",
+                "FileLocation" : "#{FileLocation}",
+                "Bucket" : "#{BucketName}",
+                "Key" : "#{Key}"
+            }
+        }
+    }
+}

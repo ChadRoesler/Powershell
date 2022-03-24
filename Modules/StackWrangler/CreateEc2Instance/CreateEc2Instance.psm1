@@ -49,12 +49,12 @@ function Create-Ec2Instance
         {
             $userData = [System.IO.File]::ReadAllText($userDataFileLocation)
         }
-        $transformedUserData = $userData -replace "\r\n","#{Return}"
-        $transformedUserData = $transformedUserData -replace "\n\r","#{Return}"
-        $transformedUserData = $transformedUserData -replace "\r","#{Return}"
-        $transformedUserData = $transformedUserData -replace "\n","#{Return}"
-        $transformedUserData = $transformedUserData -replace "\#\{Return\}", "`",#{Return}`""
-        $transformedUserData = $transformedUserData -split "#{Return}"
+        $transformedUserData = $userData -replace "\r\n","#{ReturnCharacterHoldSpace}"
+        $transformedUserData = $transformedUserData -replace "\n\r","#{ReturnCharacterHoldSpace}"
+        $transformedUserData = $transformedUserData -replace "\r","#{ReturnCharacterHoldSpace}"
+        $transformedUserData = $transformedUserData -replace "\n","#{ReturnCharacterHoldSpace}"
+        $transformedUserData = $transformedUserData -replace "\#\{ReturnCharacterHoldSpace\}", "`",#{ReturnCharacterHoldSpace}`""
+        $transformedUserData = $transformedUserData -split "#{ReturnCharacterHoldSpace}"
         $transformedUserData = $transformedUserData -join "`r`n"
         $transformedUserData = $transformedUserData -replace "`"`",", ""
         $transformedUserData = "`"$($transformedUserData)\n`""
